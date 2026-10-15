@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>One-Trip Errand Planner — Everyday Needs Finder</title>
+
+    <!-- Tailwind CSS (utility classes) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
+
+    <!-- Application styles (Leaflet core CSS + Glassmorphism UI) -->
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+
+    <div class="app-container">
+        <!-- Interactive Fullscreen Map -->
+        <div id="map" role="application" aria-label="Interactive Map"></div>
+
+        <!-- Left Floating Panel: Search & Explore -->
+        <aside id="explorePanel" class="glass-panel" aria-label="Explore and Search">
+            <header class="panel-header">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h1 class="font-bold text-sm leading-tight text-white">Errand Planner</h1>
+                        <p class="text-[11px] text-zinc-400">Everyday Needs Finder</p>
+                    </div>
+                </div>
+            </header>
+
+            <div class="panel-body">
+                <!-- Location Search -->
+                <form id="searchForm" novalidate class="space-y-2">
+                    <label for="q" class="block text-xs font-semibold uppercase tracking-wider text-zinc-400">Search Location</label>
+                    <div class="flex gap-2">
+                        <input id="q" type="text" maxlength="100" placeholder="Enter city, place, or area…"
+                            class="flex-1 min-w-0 rounded-lg bg-slate-900/80 border border-slate-700/80 px-3 py-1.5 text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 text-xs">
+                        <button type="submit"
+                            class="rounded-lg bg-emerald-600 hover:bg-emerald-500 px-3 py-1.5 font-medium text-white text-xs transition shadow-sm">
+                            Search
+                        </button>
+                    </div>
+                    <p id="formMsg" role="alert" class="text-xs text-rose-300"></p>
+
+                    <button type="button" id="locBtn"
+                        class="w-full flex items-center justify-center gap-2 rounded-lg border border-slate-700/80 bg-slate-800/40 hover:bg-slate-800/80 py-1.5 text-xs text-zinc-300 hover:text-white transition">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/>
+                        </svg>
+                        Use my current location
+                    </button>
+
+                    <div class="text-[11px] text-zinc-400 flex flex-wrap gap-1 items-center">
+                        <span>Quick:</span>
+                        <button type="button" class="ex text-emerald-400 hover:underline">Connaught Place, Delhi</button> · 
+                        <button type="button" class="ex text-emerald-400 hover:underline">MG Road, Bengaluru</button>
+                    </div>
+                </form>
+
+                <!-- Categories -->
+                <fieldset>
+                    <legend class="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-1.5">Facility Categories</legend>
+                    <div id="cats" class="grid grid-cols-2 gap-1.5"></div>
+                </fieldset>
+
+                <!-- Search Radius & Sort -->
+                <div class="grid grid-cols-2 gap-2 text-xs">
+                    <label class="block text-zinc-400 font-medium">Radius
+                        <select id="radius" class="mt-1 w-full rounded-lg bg-slate-900/80 border border-slate-700/80 px-2.5 py-1.5 text-white focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                            <option value="500">500 m</option>
+                            <option value="1000" selected>1 km</option>
+                            <option value="2000">2 km</option>
+                            <option value="5000">5 km</option>
+                        </select>
+                    </label>
+                    <label class="block text-zinc-400 font-medium">Sort by
+                        <select id="sort" class="mt-1 w-full rounded-lg bg-slate-900/80 border border-slate-700/80 px-2.5 py-1.5 text-white focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                            <option value="dist">Nearest first</option>
+                            <option value="name">Name (A–Z)</option>
+                        </select>
+                    </label>
+                </div>
+
+                <!-- Status alert container -->
+                <div id="status" class="hidden text-xs" role="status" aria-live="polite"></div>
+
+                <!-- Results list -->
+                <section class="flex flex-col flex-1 min-h-0">
+                    <div class="flex items-center justify-between mb-1">
+                        <h2 class="text-xs font-semibold uppercase tracking-wider text-zinc-400">
+                            Nearby Places <span id="count" class="text-zinc-500 font-normal"></span>
+                        </h2>
+                    </div>
+                    <p id="where" class="text-[11px] text-zinc-400 mb-2 truncate"></p>
+                    <div id="results" class="space-y-2 flex-1 overflow-y-auto pr-1" aria-busy="false">
+                        <div class="rounded-xl border border-dashed border-slate-700/70 p-4 text-center text-zinc-400 text-xs">
+                            Search a place, use your location, or click on the map to find nearby essentials.
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Place details modal/card -->
+                <section id="detail" class="hidden rounded-xl border border-emerald-500/30 bg-slate-900/90 p-3 space-y-2 text-xs shadow-lg"></section>
+            </div>
+
+            <footer class="panel-footer text-[10px] text-zinc-500 flex items-center justify-between">
+                <span>OSM © Contributors (ODbL)</span>
+                <span>Overpass & Nominatim APIs</span>
+            </footer>
+        </aside>
+
+        <!-- Right Floating Panel: My Trip (One-Trip Errand Planner) -->
+        <aside id="tripPanel" class="glass-panel" aria-label="One-Trip Errand Planner">
+            <header class="panel-header">
+                <div class="flex items-center gap-2">
+                    <div class="w-7 h-7 rounded-lg bg-blue-500/20 border border-blue-500/30 flex items-center justify-center text-blue-400 font-bold text-xs">
+                        🎒
+                    </div>
+                    <div>
+                        <h2 class="font-bold text-sm text-white">My Trip</h2>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span id="tripCountBadge" class="text-[11px] bg-blue-600/30 text-blue-300 border border-blue-500/30 px-2 py-0.5 rounded-full font-semibold">
+                        0 stops
+                    </span>
+                    <button type="button" id="clearTripHeaderBtn" title="Clear all stops" class="text-zinc-400 hover:text-rose-400 text-xs transition p-1">
+                        Clear
+                    </button>
+                </div>
+            </header>
+
+            <div class="panel-body">
+                <!-- Instruction banner -->
+                <div class="text-[11px] text-zinc-400 bg-slate-900/50 rounded-lg p-2.5 border border-slate-800">
+                    Add stops from the explore panel, reorder errands, and calculate an efficient road route.
+                </div>
+
+                <!-- Stops List -->
+                <div id="tripStops" class="space-y-2 flex-1 overflow-y-auto pr-1">
+                    <!-- Dynamic stop cards or empty state -->
+                    <div id="tripEmptyState" class="py-10 px-4 text-center space-y-2">
+                        <div class="w-12 h-12 rounded-full bg-slate-800/80 border border-slate-700 flex items-center justify-center mx-auto text-xl text-slate-400">
+                            🗺️
+                        </div>
+                        <p class="font-medium text-white text-xs">Your next trip starts here.</p>
+                        <p class="text-[11px] text-zinc-400">Add places from the Explore panel to build your one-trip route.</p>
+                    </div>
+                </div>
+            </div>
+
+            <footer class="panel-footer space-y-3">
+                <!-- Trip Summary Info -->
+                <div id="tripSummary" class="bg-slate-900/80 border border-slate-800 rounded-xl p-2.5 space-y-1.5 text-xs">
+                    <div class="flex justify-between items-center text-zinc-400">
+                        <span>Total Stops:</span>
+                        <span id="summaryStops" class="font-semibold text-white">0</span>
+                    </div>
+                    <div class="flex justify-between items-center text-zinc-400">
+                        <span>Trip Route Distance:</span>
+                        <span id="summaryDistance" class="font-semibold text-cyan-400">—</span>
+                    </div>
+                    <div class="flex justify-between items-center text-zinc-400">
+                        <span>Est. Driving Time:</span>
+                        <span id="summaryTime" class="font-semibold text-zinc-300">—</span>
+                    </div>
+                    <p id="routeStatus" class="text-[11px] text-zinc-400 italic pt-1 border-t border-slate-800">
+                        No route planned yet.
+                    </p>
+                </div>
+
+                <!-- Action buttons -->
+                <div class="flex gap-2">
+                    <button type="button" id="planTripBtn"
+                        class="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 py-2.5 font-semibold text-white text-xs transition shadow-lg shadow-blue-600/30 active:scale-[0.98]">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polygon points="3 11 22 2 13 21 11 13 3 11"/>
+                        </svg>
+                        Plan My Trip
+                    </button>
+                    <button type="button" id="clearTripBtn"
+                        class="rounded-xl border border-slate-700 bg-slate-800/60 hover:bg-rose-950/40 hover:border-rose-800/60 px-3 py-2.5 text-xs text-zinc-400 hover:text-rose-300 transition">
+                        Reset
+                    </button>
+                </div>
+            </footer>
+        </aside>
+
+        <!-- Mobile View Navigation Bar (< 1024px) -->
+        <nav class="mobile-nav" aria-label="Mobile Navigation">
+            <button type="button" id="mobExploreBtn" class="active">🔍 Explore</button>
+            <button type="button" id="mobTripBtn">🎒 Trip (<span id="mobTripCount">0</span>)</button>
+            <button type="button" id="mobMapBtn">🗺️ Map</button>
+        </nav>
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+
+    <!-- Application Logic -->
+    <script src="app.js"></script>
+</body>
+
+</html>
